@@ -1889,33 +1889,61 @@ function saveToLog() {
   btn.disabled = true;
   btn.style.opacity = '0.7';
 
-  fetch(APPS_SCRIPT_URL, {
-    method: 'POST',
-    mode: 'no-cors',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload)
-  })
-  .then(function() {
+  // Use a form-based POST to bypass CORS restrictions with Apps Script
+  var form = document.createElement('form');
+  form.method = 'POST';
+  form.action = APPS_SCRIPT_URL;
+  form.target = 'save-iframe';
+  form.style.display = 'none';
+
+  var input = document.createElement('input');
+  input.type = 'hidden';
+  input.name = 'data';
+  input.value = JSON.stringify(payload);
+  form.appendChild(input);
+  document.body.appendChild(form);
+
+  // Create hidden iframe to receive response
+  var iframe = document.getElementById('save-iframe');
+  if (!iframe) {
+    iframe = document.createElement('iframe');
+    iframe.name = 'save-iframe';
+    iframe.id = 'save-iframe';
+    iframe.style.display = 'none';
+    document.body.appendChild(iframe);
+  }
+
+  iframe.onload = function() {
     btn.innerHTML = '&#10003; Saved to Log!';
     btn.style.background = '#27ae60';
     setTimeout(function() {
       btn.innerHTML = origText;
       btn.disabled = false;
       btn.style.opacity = '1';
-      btn.style.background = '#1A2318';
+      btn.style.background = '#2471A3';
     }, 3000);
-  })
-  .catch(function(err) {
-    btn.innerHTML = '&#9888; Error — try again';
-    btn.style.background = '#c0392b';
-    btn.disabled = false;
+    document.body.removeChild(form);
+  };
+
+  // Also use fetch with no-cors as backup — Apps Script receives it even without response
+  fetch(APPS_SCRIPT_URL, {
+    method: 'POST',
+    mode: 'no-cors',
+    body: JSON.stringify(payload)
+  }).then(function() {
+    btn.innerHTML = '&#10003; Saved to Log!';
+    btn.style.background = '#27ae60';
     setTimeout(function() {
       btn.innerHTML = origText;
-      btn.style.background = '#1A2318';
+      btn.disabled = false;
       btn.style.opacity = '1';
+      btn.style.background = '#2471A3';
     }, 3000);
-    console.error('Save to Log error:', err);
+  }).catch(function(err) {
+    console.error('Fetch error:', err);
   });
+
+  form.submit();
 }
 
 </script>
