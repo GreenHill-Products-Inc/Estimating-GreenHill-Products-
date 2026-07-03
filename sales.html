@@ -239,11 +239,23 @@ body.sales-mode .sales-banner{display:flex!important}
           <span>Include reference images in PDF</span>
         </label>
         <div style="display:flex;align-items:center;">
-        <button onclick="doPrint()" style="background:#72a31a;color:#fff;border:none;border-radius:8px;padding:10px 28px;font-size:14px;font-weight:700;cursor:pointer;letter-spacing:.3px;">
-          &#9112;&nbsp; Print / Save PDF
+        <button onclick="doPrint()" style="background:#76BC21;color:#fff;border:none;border-radius:50px;padding:0;font-size:11px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;box-shadow:0 2px 8px rgba(118,188,33,.3);transition:all .18s;overflow:hidden;">
+          <span style="background:rgba(0,0,0,.12);width:36px;height:36px;display:flex;align-items:center;justify-content:center;flex-shrink:0;border-radius:50%;">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+          </span>
+          <span style="padding:0 16px 0 10px;letter-spacing:.1px;">Print / Save</span>
         </button>
-        <button onclick="doEmail(event)" style="background:#fff;color:#527614;border:2px solid #72a31a;border-radius:8px;padding:9px 24px;font-size:14px;font-weight:700;cursor:pointer;letter-spacing:.3px;margin-left:10px;">
-          &#9993;&nbsp; Email estimate
+        <button onclick="doEmail(event)" style="background:#5A9A18;color:#fff;border:none;border-radius:50px;padding:0;font-size:11px;font-weight:600;cursor:pointer;margin-left:8px;display:inline-flex;align-items:center;box-shadow:0 2px 8px rgba(90,154,24,.3);transition:all .18s;overflow:hidden;">
+          <span style="background:rgba(0,0,0,.12);width:36px;height:36px;display:flex;align-items:center;justify-content:center;flex-shrink:0;border-radius:50%;">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+          </span>
+          <span style="padding:0 16px 0 10px;letter-spacing:.1px;">Send to Email</span>
+        </button>
+        <button id="save-to-log-btn" onclick="saveToLog()" style="background:#2471A3;color:#fff;border:none;border-radius:50px;padding:0;font-size:11px;font-weight:600;cursor:pointer;margin-left:8px;display:inline-flex;align-items:center;box-shadow:0 2px 8px rgba(36,113,163,.3);transition:all .18s;overflow:hidden;">
+          <span style="background:rgba(0,0,0,.12);width:36px;height:36px;display:flex;align-items:center;justify-content:center;flex-shrink:0;border-radius:50%;">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+          </span>
+          <span style="padding:0 16px 0 10px;letter-spacing:.1px;">Save to Log</span>
         </button>
         </div>
       </div>
@@ -1738,6 +1750,174 @@ function setDates(){
   document.getElementById('est-number').textContent=num;
 }
 setDates(); addSection('Garage Doors'); onClientType();
+
+// ── SAVE TO LOG ───────────────────────────────────────────────────────────────
+// Replace this URL after deploying the Apps Script
+var APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyjErF0qjw3qLS3dNKgI5T5q0JRh3eXlnoRFXVtknsC5nxbZC1hvEJ-0x0qvxwzXvbr/exec';
+
+function getWeekOfMonth(dateStr) {
+  if (!dateStr) return '';
+  var parts = dateStr.split('/');
+  if (parts.length < 3) return '';
+  var d = new Date(parts[2], parts[0]-1, parts[1]);
+  var firstDay = new Date(d.getFullYear(), d.getMonth(), 1);
+  return Math.ceil((d.getDate() + firstDay.getDay()) / 7);
+}
+
+function getSectionProducts() {
+  var products = {};
+  var PROD_LIST = ['Garage Doors','Garage Door Openers','Shower Doors','Mirrors',
+    'Bath Accessories','Gutters','Screen Porches','Melamine','Shelving','Locks',
+    'Blinds','Handrail','Glass Shelves'];
+  PROD_LIST.forEach(function(p){ products[p] = 'No'; });
+
+  document.querySelectorAll('.sec-block').forEach(function(sec) {
+    var sel = sec.querySelector('.sec-top select');
+    if (sel && sel.value && sel.value !== '-') {
+      products[sel.value] = 'Yes';
+    }
+  });
+  return products;
+}
+
+function getSectionProductValues() {
+  // Returns {productName: totalValue} for each section
+  var values = {};
+  document.querySelectorAll('.sec-block').forEach(function(sec) {
+    var sel = sec.querySelector('.sec-top select');
+    if (!sel || !sel.value || sel.value === '-') return;
+    var prod = sel.value;
+    var secTotal = 0;
+    sec.querySelectorAll('tbody tr').forEach(function(tr) {
+      if (tr.style.display === 'none') return;
+      if (tr.getAttribute('data-shower-row')) {
+        var ins = tr.querySelectorAll('input[type=number]');
+        if (ins.length >= 3) {
+          var w = parseFloat(ins[0].value)||0, h = parseFloat(ins[1].value)||0, p = parseFloat(ins[2].value)||0;
+          secTotal += (w>0&&h>0) ? Math.round(w*h/144*100)/100*p : 0;
+        }
+      } else {
+        var nums = tr.querySelectorAll('input[type=number]');
+        if (nums.length >= 2) secTotal += (parseFloat(nums[0].value)||0)*(parseFloat(nums[1].value)||0);
+      }
+    });
+    if (!values[prod]) values[prod] = 0;
+    values[prod] += secTotal;
+  });
+  return values;
+}
+
+function saveToLog() {
+  // Validate required fields
+  var clientName = document.getElementById('client-name').value.trim();
+  var estDate = document.getElementById('est-date').value.trim();
+  var salesRep = document.getElementById('prep-select').value.trim();
+
+  if (!clientName) { alert('Please fill in the Client / Builder name before saving.'); return; }
+  if (!estDate) { alert('Please fill in the estimate date before saving.'); return; }
+  if (!salesRep || salesRep === 'other') {
+    salesRep = document.getElementById('prep-custom') ? document.getElementById('prep-custom').value.trim() : '';
+  }
+  if (!salesRep) { alert('Please select a Prepared By name before saving.'); return; }
+
+  // Map prep name to sales rep
+  var repMap = {
+    'Lillian Martinez': 'Lillian Martinez',
+    'Lillian': 'Lillian Martinez',
+    'Charles Hemingway': 'Charles Hemingway',
+    'Charles': 'Charles Hemingway',
+    'Cory Martinez': 'Cory Martinez',
+    'Cory': 'Cory Martinez',
+    'Sebastián Álvarez': 'House Account',
+    'Sebastian Alvarez': 'House Account',
+    'Hernán Arias': 'House Account',
+    'Hernan Arias': 'House Account',
+  };
+  var mappedRep = repMap[salesRep] || salesRep;
+
+  // Format date MM/DD/YYYY
+  var dateParts = estDate.split('-');
+  var fmtDate = dateParts.length === 3
+    ? (dateParts[1] + '/' + dateParts[2] + '/' + dateParts[0])
+    : estDate;
+
+  // Get grand total
+  var grandEl = document.getElementById('t-grand-disc');
+  var grandRow = document.getElementById('t-grand-disc-row');
+  var useDisc = grandRow && grandRow.style.display !== 'none';
+  var grandTotal = useDisc
+    ? parseFloat((grandEl ? grandEl.textContent : '0').replace(/[$,]/g,''))||0
+    : parseFloat((document.getElementById('t-grand').textContent||'0').replace(/[$,]/g,''))||0;
+
+  var customerType = document.getElementById('type-homeowner').checked ? 'Homeowner' : 'Builder';
+  var estNum = (document.getElementById('est-number').textContent||'').trim();
+  var weekNum = getWeekOfMonth(fmtDate);
+  var subdivision = document.getElementById('client-subdiv').value.trim();
+  var lotNum = document.getElementById('client-lot').value.trim();
+  var address = document.getElementById('client-address').value.trim();
+  var city = document.getElementById('client-city').value.trim();
+  var state = document.getElementById('client-state').value.trim();
+  var zip = document.getElementById('client-zip').value.trim();
+  var stateZip = (state + ' ' + zip).trim();
+  var notes = document.getElementById('notes') ? document.getElementById('notes').value.trim() : '';
+
+  var products = getSectionProducts();
+  var productValues = getSectionProductValues();
+
+  var payload = {
+    date: fmtDate,
+    estimateNum: estNum,
+    weekNum: weekNum,
+    clientName: clientName,
+    subdivision: subdivision,
+    lotNum: lotNum,
+    address: address,
+    city: city,
+    stateZip: stateZip,
+    salesRep: mappedRep,
+    customerType: customerType,
+    estimateValue: grandTotal,
+    products: products,
+    productValues: productValues,
+    notes: notes,
+  };
+
+  // Show saving state
+  var btn = document.getElementById('save-to-log-btn');
+  var origText = btn.innerHTML;
+  btn.innerHTML = '&#9203; Saving…';
+  btn.disabled = true;
+  btn.style.opacity = '0.7';
+
+  fetch(APPS_SCRIPT_URL, {
+    method: 'POST',
+    mode: 'no-cors',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  })
+  .then(function() {
+    btn.innerHTML = '&#10003; Saved to Log!';
+    btn.style.background = '#27ae60';
+    setTimeout(function() {
+      btn.innerHTML = origText;
+      btn.disabled = false;
+      btn.style.opacity = '1';
+      btn.style.background = '#1A2318';
+    }, 3000);
+  })
+  .catch(function(err) {
+    btn.innerHTML = '&#9888; Error — try again';
+    btn.style.background = '#c0392b';
+    btn.disabled = false;
+    setTimeout(function() {
+      btn.innerHTML = origText;
+      btn.style.background = '#1A2318';
+      btn.style.opacity = '1';
+    }, 3000);
+    console.error('Save to Log error:', err);
+  });
+}
+
 </script>
 </body>
 </html>
