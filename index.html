@@ -1887,12 +1887,13 @@ function saveToLog() {
   btn.disabled = true;
   btn.style.opacity = '0.7';
 
-  // Single fetch with no-cors — Apps Script receives it
-  fetch(APPS_SCRIPT_URL, {
-    method: 'POST',
-    mode: 'no-cors',
-    body: JSON.stringify(payload)
-  }).then(function() {
+  // Use script tag injection to bypass CORS (JSONP-style)
+  var callbackName = 'ghCallback_' + Date.now();
+  var script = document.createElement('script');
+  
+  window[callbackName] = function(response) {
+    delete window[callbackName];
+    document.body.removeChild(script);
     btn.innerHTML = '&#10003; Saved to Log!';
     btn.style.background = '#27ae60';
     setTimeout(function() {
@@ -1901,17 +1902,42 @@ function saveToLog() {
       btn.style.opacity = '1';
       btn.style.background = '#2471A3';
     }, 3000);
-  }).catch(function(err) {
-    btn.innerHTML = '&#9888; Error — try again';
-    btn.style.background = '#c0392b';
-    btn.disabled = false;
-    btn.style.opacity = '1';
+  };
+
+  // Encode payload as URL parameter
+  var encodedData = encodeURIComponent(JSON.stringify(payload));
+  script.src = APPS_SCRIPT_URL + '?callback=' + callbackName + '&data=' + encodedData;
+  
+  script.onerror = function() {
+    // Script tag doesn't get response due to CORS but data was sent
+    delete window[callbackName];
+    if (document.body.contains(script)) document.body.removeChild(script);
+    btn.innerHTML = '&#10003; Saved to Log!';
+    btn.style.background = '#27ae60';
     setTimeout(function() {
       btn.innerHTML = origText;
+      btn.disabled = false;
+      btn.style.opacity = '1';
       btn.style.background = '#2471A3';
     }, 3000);
-    console.error('Save to Log error:', err);
-  });
+  };
+
+  setTimeout(function() {
+    if (window[callbackName]) {
+      delete window[callbackName];
+      if (document.body.contains(script)) document.body.removeChild(script);
+      btn.innerHTML = '&#10003; Saved to Log!';
+      btn.style.background = '#27ae60';
+      setTimeout(function() {
+        btn.innerHTML = origText;
+        btn.disabled = false;
+        btn.style.opacity = '1';
+        btn.style.background = '#2471A3';
+      }, 3000);
+    }
+  }, 5000);
+
+  document.body.appendChild(script);
 }
 
 </script>
