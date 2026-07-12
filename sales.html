@@ -193,6 +193,15 @@ body.sales-mode .sales-banner{display:flex!important}
               </select>
               <input type="text" id="prep-custom" placeholder="Write name…" style="display:none;margin-top:4px;" />
             </div>
+            <div class="field col-span-2">
+              <label>Sales Representative</label>
+              <select id="sales-rep-select" style="border:2px solid #76BC21;border-radius:6px;padding:6px 10px;font-size:13px;font-weight:600;color:#333;background:#fff;width:100%;">
+                <option value="Lillian Martinez">Lillian Martinez</option>
+                <option value="Charles Hemingway">Charles Hemingway</option>
+                <option value="Cory Martinez">Cory Martinez</option>
+                <option value="House Account">House Account</option>
+              </select>
+            </div>
             <div class="field col-span-2"><label>Phone</label><input type="text" id="prep-phone" value="843-503-4441" /></div>
             <div class="field col-span-2"><label>Email</label><input type="text" id="prep-email" value="estimating@greenhill-products.com" /></div>
           </div>
@@ -1811,29 +1820,12 @@ function saveToLog() {
   // Validate required fields
   var clientName = document.getElementById('client-name').value.trim();
   var estDate = document.getElementById('est-date').value.trim();
-  var salesRep = document.getElementById('prep-select').value.trim();
+  // Get Sales Rep from dedicated selector
+  var mappedRep = document.getElementById('sales-rep-select').value;
 
   if (!clientName) { alert('Please fill in the Client / Builder name before saving.'); return; }
   if (!estDate) { alert('Please fill in the estimate date before saving.'); return; }
-  if (!salesRep || salesRep === 'other') {
-    salesRep = document.getElementById('prep-custom') ? document.getElementById('prep-custom').value.trim() : '';
-  }
-  if (!salesRep) { alert('Please select a Prepared By name before saving.'); return; }
-
-  // Map prep name to sales rep
-  var repMap = {
-    'Lillian Martinez': 'Lillian Martinez',
-    'Lillian': 'Lillian Martinez',
-    'Charles Hemingway': 'Charles Hemingway',
-    'Charles': 'Charles Hemingway',
-    'Cory Martinez': 'Cory Martinez',
-    'Cory': 'Cory Martinez',
-    'Sebastián Álvarez': 'House Account',
-    'Sebastian Alvarez': 'House Account',
-    'Hernán Arias': 'House Account',
-    'Hernan Arias': 'House Account',
-  };
-  var mappedRep = repMap[salesRep] || salesRep;
+  if (!mappedRep) { alert('Please select a Sales Representative before saving.'); return; }
 
   // Format date MM/DD/YYYY
   var dateParts = estDate.split('-');
@@ -1861,7 +1853,7 @@ function saveToLog() {
   var stateZip = (state + ' ' + zip).trim();
   var notes = document.getElementById('notes') ? document.getElementById('notes').value.trim() : '';
 
-  var products = getSectionProducts();
+  // Get product values (accumulated by product type)
   var productValues = getSectionProductValues();
 
   var payload = {
@@ -1877,7 +1869,6 @@ function saveToLog() {
     salesRep: mappedRep,
     customerType: customerType,
     estimateValue: grandTotal,
-    products: products,
     productValues: productValues,
     notes: notes,
   };
