@@ -73,6 +73,9 @@ body.sales-mode .sales-banner{display:flex!important}
 .pay-box p{font-size:11px;color:var(--muted);margin-bottom:2px}
 .pay-box a{color:var(--green);font-weight:600;text-decoration:none}
 .bundle-badge{background:var(--green);color:#fff;font-size:10px;font-weight:700;padding:2px 7px;border-radius:10px;margin-left:4px}
+.option-badge{background:#2471A3;color:#fff;font-size:10px;font-weight:700;padding:2px 7px;border-radius:10px;margin-left:4px}
+.option-badge-alt{background:#999;color:#fff;font-size:10px;font-weight:700;padding:2px 7px;border-radius:10px;margin-left:4px}
+.sec-alt-excluded{opacity:.55;outline:2px dashed #f0ad4e;outline-offset:2px}
 .print-view{display:none;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;font-size:7.5pt;color:#1a1a1a;line-height:1.35;width:100%;background:#fff;padding:0}
 .pv-card{background:#fff;border:.5pt solid #ddd;border-radius:6pt;margin-bottom:2pt;overflow:hidden;width:100%}
 .pv-card-hdr{page-break-after:avoid;break-after:avoid}
@@ -214,6 +217,7 @@ body.sales-mode .sales-banner{display:flex!important}
     <div class="card-header" style="display:flex;justify-content:space-between;align-items:center;">
       <span>Products &amp; services</span>
       <button onclick="showBundleModal()" style="background:rgba(255,255,255,.2);border:1px solid rgba(255,255,255,.5);color:#fff;border-radius:5px;padding:4px 12px;font-size:12px;font-weight:600;cursor:pointer;">&#128230; Bundle sections</button>
+      <button onclick="showOptionModal()" style="background:rgba(255,255,255,.2);border:1px solid rgba(255,255,255,.5);color:#fff;border-radius:5px;padding:4px 12px;font-size:12px;font-weight:600;cursor:pointer;margin-left:6px;">&#8644; Alternate options</button>
     </div>
     <div class="card-body" style="padding-bottom:.4rem;">
       <div id="sections-container"></div>
@@ -300,6 +304,23 @@ body.sales-mode .sales-banner{display:flex!important}
     <div style="display:flex;gap:8px;justify-content:flex-end;">
       <button onclick="closeBundleModal()" style="background:transparent;border:1px solid #ddd;border-radius:6px;padding:8px 18px;font-size:13px;cursor:pointer;">Cancel</button>
       <button onclick="applyBundle()" style="background:#72a31a;color:#fff;border:none;border-radius:6px;padding:8px 18px;font-size:13px;font-weight:600;cursor:pointer;">Apply bundle</button>
+    </div>
+  </div>
+</div>
+
+<!-- Alternate Options Modal -->
+<div id="option-modal" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.5);z-index:1000;align-items:center;justify-content:center;">
+  <div style="background:#fff;border-radius:12px;padding:1.5rem;max-width:480px;width:90%;max-height:80vh;overflow-y:auto;box-shadow:0 8px 32px rgba(0,0,0,.2);">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;">
+      <h3 style="font-size:16px;font-weight:700;">Alternate options</h3>
+      <button onclick="closeOptionModal()" style="background:none;border:none;font-size:22px;cursor:pointer;color:#666;">&times;</button>
+    </div>
+    <p style="font-size:13px;color:#666;margin-bottom:1rem;">Select sections that are alternative options for the same item (e.g. with/without windows). Only the highest-priced option counts toward the total and gets logged — the others still print for the client to compare, marked as alternates.</p>
+    <div id="option-section-list" style="display:flex;flex-direction:column;gap:8px;margin-bottom:1.25rem;"></div>
+    <div style="background:#eaf3fb;border-radius:8px;padding:10px 14px;margin-bottom:1.25rem;font-size:13px;">Counts toward total: <strong id="option-preview-total" style="color:#2471A3;font-size:15px;">$0.00</strong></div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;">
+      <button onclick="closeOptionModal()" style="background:transparent;border:1px solid #ddd;border-radius:6px;padding:8px 18px;font-size:13px;cursor:pointer;">Cancel</button>
+      <button onclick="applyOptionGroup()" style="background:#2471A3;color:#fff;border:none;border-radius:6px;padding:8px 18px;font-size:13px;font-weight:600;cursor:pointer;">Group as options</button>
     </div>
   </div>
 </div>
@@ -491,6 +512,7 @@ const CAPTIONS = {
 
 var secCount = 0;
 var _bundles = [];
+var _optionGroups = [];
 
 function fmt(n){return '$'+Math.abs(n).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g,',');}
 function fmtDate(s){if(!s)return '';var p=s.split('-');return p[1]+'/'+p[2]+'/'+p[0];}
@@ -1256,12 +1278,25 @@ function addItem(sid,defaultUnit,defaultNote){
 }
 
 function removeItem(rid){var el=document.getElementById(rid);if(el){el.remove();recalc();}}
-function removeSec(sid){var el=document.getElementById(sid);if(el){el.remove();recalc();}}
+function removeSec(sid){
+  var el=document.getElementById(sid);
+  if(el){
+    el.remove();
+    _bundles.forEach(function(b){var idx=b.ids.indexOf(sid);if(idx>=0)b.ids.splice(idx,1);});
+    _bundles=_bundles.filter(function(b){return b.ids.length>0;});
+    _optionGroups.forEach(function(g){var idx=g.ids.indexOf(sid);if(idx>=0)g.ids.splice(idx,1);});
+    _optionGroups=_optionGroups.filter(function(g){return g.ids.length>1;});
+    refreshBundleBadges(); refreshOptionBadges();
+    recalc();
+  }
+}
 
 // ── RECALC ────────────────────────────────────────────────────────────────
 function recalc(){
   var sub=0;
+  var optionExcluded=getOptionExcludedIds();
   document.querySelectorAll('.sec-block').forEach(function(sec){
+    var isAltExcluded=optionExcluded.indexOf(sec.id)>=0;
     sec.querySelectorAll('tbody tr').forEach(function(tr){
       if(tr.style.display==='none')return;
       if(tr.id&&tr.id.indexOf('sh-sub-')===0)return; // skip shower subtotal display row
@@ -1271,20 +1306,20 @@ function recalc(){
         var ins=tr.querySelectorAll('input[type=number]'); if(ins.length<3)return;
         var w=parseFloat(ins[0].value)||0,h=parseFloat(ins[1].value)||0,p=parseFloat(ins[2].value)||0;
         var sqft=(w>0&&h>0)?Math.round(w*h/144*100)/100:0;
-        var line=sqft*p; sub+=line;
+        var line=sqft*p; if(!isAltExcluded)sub+=line;
         var cell=tr.querySelector('.line-total'); if(cell)cell.textContent=fmt(line);
         return;
       }
       // Shower upgrade row
       if(tr.id&&tr.id.indexOf('sh-upgrade-')===0){
         var ins=tr.querySelectorAll('input[type=number]'); if(!ins.length)return;
-        var line=parseFloat(ins[0].value)||0; sub+=line;
+        var line=parseFloat(ins[0].value)||0; if(!isAltExcluded)sub+=line;
         var cell=tr.querySelector('.line-total'); if(cell)cell.textContent=fmt(line);
         return;
       }
       var nums=tr.querySelectorAll('input[type=number]'); if(nums.length<2)return;
       var line=(parseFloat(nums[0].value)||0)*(parseFloat(nums[1].value)||0);
-      sub+=line;
+      if(!isAltExcluded)sub+=line;
       var cell=tr.querySelector('.line-total'); if(cell)cell.textContent=fmt(line);
     });
   });
@@ -1303,6 +1338,7 @@ function recalc(){
     if(discAmt)discAmt.textContent='$0.00';
     if(grandDiscRow)grandDiscRow.style.display='none';
   }
+  if(_optionGroups.length>0)refreshOptionBadges();
 }
 
 // ── CLIENT TYPE ───────────────────────────────────────────────────────────
@@ -1406,6 +1442,105 @@ function refreshBundleBadges(){
       var hdr=sec.querySelector('.sec-top'); if(!hdr)return;
       var b=document.createElement('span'); b.className='bundle-badge'; b.textContent='B'+(i+1);
       hdr.insertBefore(b,hdr.querySelector('.remove-sec'));
+    });
+  });
+}
+
+// ── ALTERNATE OPTIONS (mutually exclusive; highest counts) ────────────────
+function getSectionTotal(sec){
+  var total=0;
+  sec.querySelectorAll('tbody tr').forEach(function(tr){
+    if(tr.style.display==='none')return;
+    if(tr.id&&tr.id.indexOf('sh-sub-')===0)return;
+    if(tr.id&&tr.id.indexOf('sh-upglist-row-')===0)return;
+    if(tr.getAttribute('data-shower-row')){
+      var ins=tr.querySelectorAll('input[type=number]'); if(ins.length<3)return;
+      var w=parseFloat(ins[0].value)||0,h=parseFloat(ins[1].value)||0,p=parseFloat(ins[2].value)||0;
+      var sqft=(w>0&&h>0)?Math.round(w*h/144*100)/100:0;
+      total+=sqft*p; return;
+    }
+    if(tr.id&&tr.id.indexOf('sh-upgrade-')===0){
+      var ins=tr.querySelectorAll('input[type=number]'); if(!ins.length)return;
+      total+=parseFloat(ins[0].value)||0; return;
+    }
+    var nums=tr.querySelectorAll('input[type=number]'); if(nums.length<2)return;
+    total+=(parseFloat(nums[0].value)||0)*(parseFloat(nums[1].value)||0);
+  });
+  return total;
+}
+function getOptionExcludedIds(){
+  var excluded=[];
+  _optionGroups.forEach(function(g){
+    var max=-1, maxId=null;
+    g.ids.forEach(function(sid){
+      var sec=document.getElementById(sid); if(!sec)return;
+      var total=getSectionTotal(sec);
+      if(total>max){max=total;maxId=sid;}
+    });
+    g.ids.forEach(function(sid){ if(sid!==maxId) excluded.push(sid); });
+  });
+  return excluded;
+}
+function showOptionModal(){
+  var list=document.getElementById('option-section-list'); list.innerHTML='';
+  var sections=document.querySelectorAll('.sec-block');
+  if(sections.length<2){alert('Add at least two product sections first.');return;}
+  var header=document.createElement('div');header.style.cssText='margin-bottom:10px;';
+  if(_optionGroups.length>0){
+    header.innerHTML='<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#888;margin-bottom:6px;">Existing option groups</div>'
+      +_optionGroups.map(function(g,i){
+        var excluded=getOptionExcludedIds();
+        var selSid=g.ids.filter(function(sid){return excluded.indexOf(sid)<0;})[0];
+        var selSec=selSid?document.getElementById(selSid):null;
+        var selProd=selSec&&selSec.querySelector('.sec-top select')?selSec.querySelector('.sec-top select').value:'?';
+        return '<div style="display:flex;align-items:center;gap:6px;background:#eaf3fb;border:1px solid #b8d9ee;border-radius:6px;padding:5px 10px;margin-bottom:4px;font-size:12px;"><span style="flex:1;font-weight:600;color:#2471A3;">Group '+(i+1)+': highest counts ('+selProd+')</span><button onclick="removeOptionGroup('+i+')" style="background:none;border:none;color:#c0392b;cursor:pointer;font-size:16px;line-height:1;">&#215;</button></div>';
+      }).join('')
+      +'<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#888;margin:10px 0 6px;">Create new option group</div>';
+  } else {header.innerHTML='<div style="font-size:11px;color:#888;margin-bottom:8px;">Select 2+ sections that are alternative options for the client (e.g. same door with/without windows).</div>';}
+  list.appendChild(header);
+  sections.forEach(function(sec){
+    var sid=sec.id, prod=sec.querySelector('.sec-top select')?sec.querySelector('.sec-top select').value:'Section';
+    var total=getSectionTotal(sec);
+    var inGroup=_optionGroups.findIndex(function(g){return g.ids.indexOf(sid)>=0;});
+    var row=document.createElement('label'); row.style.cssText='display:flex;align-items:center;gap:10px;padding:8px 10px;border:1px solid #eee;border-radius:6px;cursor:pointer;font-size:13px;margin-bottom:4px;'+(inGroup>=0?'opacity:.5;':'');
+    row.innerHTML='<input type="checkbox" class="option-modal-chk" data-sid="'+sid+'" '+(inGroup>=0?'disabled':'')+' style="width:auto;margin:0;" onchange="updateOptionPreview()" /><span style="flex:1;font-weight:500;">'+prod+'</span>'+(inGroup>=0?'<span style="font-size:11px;color:#2471A3;">Group '+(inGroup+1)+'</span>':'')+'<span style="color:#2471A3;font-weight:700;">'+fmt(total)+'</span>';
+    list.appendChild(row);
+  });
+  updateOptionPreview();
+  document.getElementById('option-modal').style.display='flex';
+}
+function updateOptionPreview(){
+  var max=0;
+  document.querySelectorAll('.option-modal-chk:checked').forEach(function(chk){
+    var sid=chk.getAttribute('data-sid'),sec=document.getElementById(sid); if(!sec)return;
+    var total=getSectionTotal(sec);
+    if(total>max)max=total;
+  });
+  document.getElementById('option-preview-total').textContent=fmt(max);
+}
+function closeOptionModal(){document.getElementById('option-modal').style.display='none';}
+function applyOptionGroup(){
+  var checked=document.querySelectorAll('.option-modal-chk:checked'); if(checked.length<2){alert('Select at least two sections to compare as options.');return;}
+  var ids=[];
+  checked.forEach(function(chk){ids.push(chk.getAttribute('data-sid'));});
+  _optionGroups.push({ids:ids});
+  refreshOptionBadges(); closeOptionModal(); recalc();
+}
+function removeOptionGroup(idx){_optionGroups.splice(idx,1);refreshOptionBadges();recalc();closeOptionModal();showOptionModal();}
+function refreshOptionBadges(){
+  document.querySelectorAll('.option-badge,.option-badge-alt').forEach(function(b){b.remove();});
+  document.querySelectorAll('.sec-alt-excluded').forEach(function(s){s.classList.remove('sec-alt-excluded');});
+  var excluded=getOptionExcludedIds();
+  _optionGroups.forEach(function(group,i){
+    group.ids.forEach(function(sid){
+      var sec=document.getElementById(sid); if(!sec)return;
+      var hdr=sec.querySelector('.sec-top'); if(!hdr)return;
+      var isExcluded=excluded.indexOf(sid)>=0;
+      var b=document.createElement('span');
+      b.className=isExcluded?'option-badge-alt':'option-badge';
+      b.textContent='OPT'+(i+1)+(isExcluded?'':' \u2605');
+      hdr.insertBefore(b,hdr.querySelector('.remove-sec'));
+      if(isExcluded)sec.classList.add('sec-alt-excluded');
     });
   });
 }
@@ -1593,6 +1728,7 @@ function buildPrintView(){
   var bundleTotals=_bundles.map(function(){return 0;});
   var bundleDescSets=_bundles.map(function(){return [];});
   var bundleImgSets=_bundles.map(function(){return [];});
+  var optionExcludedIds=getOptionExcludedIds();
   var sectionsHTML='';
 
   document.querySelectorAll('.sec-block').forEach(function(sec){
@@ -1719,7 +1855,8 @@ function buildPrintView(){
     var bathLabel=bathEl&&bathEl.value.trim()?bathEl.value.trim().toUpperCase():'';
     var secHdr=prod+(bathLabel?' – '+bathLabel:'');
     var imgCapBlock=refImg?'<div style="padding:8pt 9pt;border-bottom:.5pt solid #eee;background:#fafafa;text-align:center;"><img src="'+refImg+'" style="max-height:130pt;max-width:260pt;width:auto;border-radius:4pt;" />'+(imgCaption?'<div style="font-size:6.5pt;color:#555;margin-top:4pt;font-style:italic;">'+imgCaption+'</div>':'')+'</div>':'';
-    sectionsHTML+='<div class="pv-sec"><div class="pv-sec-hdr">'+secHdr+'</div>'+descBlock+imgCapBlock+'<table class="pv-tbl"><thead><tr><th style="width:75%">Item</th><th class="r" style="width:25%">Total</th></tr></thead><tbody>'+rows+showerSubtotalRow+'</tbody></table></div>';
+    var altRibbon=(optionExcludedIds.indexOf(sid)>=0)?'<div style="background:#fff3cd;color:#8a6d1f;font-size:6pt;font-weight:700;text-transform:uppercase;letter-spacing:.3pt;padding:2pt 7pt;border-bottom:.5pt solid #ffe69c;">Alternate Option — Not Included in Total</div>':'';
+    sectionsHTML+='<div class="pv-sec">'+altRibbon+'<div class="pv-sec-hdr">'+secHdr+'</div>'+descBlock+imgCapBlock+'<table class="pv-tbl"><thead><tr><th style="width:75%">Item</th><th class="r" style="width:25%">Total</th></tr></thead><tbody>'+rows+showerSubtotalRow+'</tbody></table></div>';
   });
 
   // Render bundles
@@ -1757,7 +1894,7 @@ function clearAll(){
   document.getElementById('prep-custom').value=''; document.getElementById('prep-custom').style.display='none';
   if(document.body.classList.contains('sales-mode')){document.getElementById('type-homeowner').checked=true;} else {document.getElementById('type-builder').checked=true;}
   onClientType();
-  secCount=0; _bundles=[]; recalc(); addSection('Garage Doors'); setDates();
+  secCount=0; _bundles=[]; _optionGroups=[]; recalc(); addSection('Garage Doors'); setDates();
 }
 function setDates(){
   var today=new Date(),valid=new Date(today); valid.setMonth(valid.getMonth()+3);
@@ -1800,7 +1937,9 @@ function getSectionProducts() {
 function getSectionProductValues() {
   // Returns {productName: totalValue} for each section
   var values = {};
+  var optionExcluded = getOptionExcludedIds();
   document.querySelectorAll('.sec-block').forEach(function(sec) {
+    if (optionExcluded.indexOf(sec.id) >= 0) return; // skip losing alternate options
     var sel = sec.querySelector('.sec-top select');
     if (!sel || !sel.value || sel.value === '-') return;
     var prod = sel.value;
@@ -1888,14 +2027,7 @@ function saveToLog() {
   btn.disabled = true;
   btn.style.opacity = '0.7';
 
-  // Use script tag injection to bypass CORS (JSONP-style)
-  var callbackName = 'ghCallback_' + Date.now();
-  var script = document.createElement('script');
-  
-  window[callbackName] = function(response) {
-    alert('DEBUG response: ' + JSON.stringify(response));
-    delete window[callbackName];
-    document.body.removeChild(script);
+  function showSaved() {
     btn.innerHTML = '&#10003; Saved to Log!';
     btn.style.background = '#27ae60';
     setTimeout(function() {
@@ -1904,42 +2036,30 @@ function saveToLog() {
       btn.style.opacity = '1';
       btn.style.background = '#2471A3';
     }, 3000);
-  };
+  }
+  function showError(err) {
+    console.error('Save to Log failed:', err);
+    alert('Could not save to log: ' + err + '\n\nCheck your internet connection and try again.');
+    btn.innerHTML = origText;
+    btn.disabled = false;
+    btn.style.opacity = '1';
+  }
 
-  // Encode payload as URL parameter
-  var encodedData = encodeURIComponent(JSON.stringify(payload));
-  script.src = APPS_SCRIPT_URL + '?callback=' + callbackName + '&data=' + encodedData;
-  
-  script.onerror = function() {
-    // Script tag doesn't get response due to CORS but data was sent
-    delete window[callbackName];
-    if (document.body.contains(script)) document.body.removeChild(script);
-    btn.innerHTML = '&#10003; Saved to Log!';
-    btn.style.background = '#27ae60';
-    setTimeout(function() {
-      btn.innerHTML = origText;
-      btn.disabled = false;
-      btn.style.opacity = '1';
-      btn.style.background = '#2471A3';
-    }, 3000);
-  };
-
-  setTimeout(function() {
-    if (window[callbackName]) {
-      delete window[callbackName];
-      if (document.body.contains(script)) document.body.removeChild(script);
-      btn.innerHTML = '&#10003; Saved to Log!';
-      btn.style.background = '#27ae60';
-      setTimeout(function() {
-        btn.innerHTML = origText;
-        btn.disabled = false;
-        btn.style.opacity = '1';
-        btn.style.background = '#2471A3';
-      }, 3000);
-    }
-  }, 5000);
-
-  document.body.appendChild(script);
+  // POST directly to the Apps Script Web App. Using mode:'no-cors' with a
+  // text/plain body avoids a CORS preflight request (Apps Script doesn't
+  // support one), so this works reliably from a static GitHub Pages site.
+  // The response is opaque (we can't read it), but the write itself is
+  // handled by doPost, which is already confirmed working server-side.
+  fetch(APPS_SCRIPT_URL, {
+    method: 'POST',
+    mode: 'no-cors',
+    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+    body: JSON.stringify(payload)
+  }).then(function() {
+    showSaved();
+  }).catch(function(err) {
+    showError(err.message || err);
+  });
 }
 
 </script>
