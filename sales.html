@@ -2050,6 +2050,8 @@ function saveToLog() {
   // support one), so this works reliably from a static GitHub Pages site.
   // The response is opaque (we can't read it), but the write itself is
   // handled by doPost, which is already confirmed working server-side.
+  alert('DEBUG v2 — about to POST to:\n' + APPS_SCRIPT_URL + '\n\nPayload size: ' + JSON.stringify(payload).length + ' chars');
+
   fetch(APPS_SCRIPT_URL, {
     method: 'POST',
     mode: 'no-cors',
