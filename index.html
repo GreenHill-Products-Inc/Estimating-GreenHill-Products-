@@ -33,6 +33,8 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
 .sec-top select{border:1px solid #cde09a;border-radius:5px;padding:5px 8px;font-size:13px;font-weight:600;color:var(--green-dark);background:var(--white)}
 .remove-sec{background:none;border:none;color:var(--muted);cursor:pointer;font-size:20px;margin-left:auto;line-height:1}.remove-sec:hover{color:var(--red)}
 .desc-preview{padding:8px 12px;font-size:12px;color:#444;line-height:1.55;background:#fafff5;border-bottom:1px solid #eaf3d6;font-style:italic}
+.desc-preview-textarea{width:100%;padding:8px 12px;font-size:12px;color:#444;line-height:1.55;background:#fafff5;border:none;border-bottom:1px solid #eaf3d6;font-style:italic;font-family:inherit;resize:vertical;min-height:56px;box-sizing:border-box}
+.desc-preview-textarea:focus{outline:2px solid #cde09a;font-style:normal}
 .sec-img-upload{padding:8px 12px;border-bottom:1px solid var(--border);background:#fcfcfa}
 .img-upload-btn{background:none;border:1px dashed var(--green);color:var(--green);font-size:12px;font-weight:600;cursor:pointer;padding:6px 10px;border-radius:6px}
 .img-upload-btn:hover{background:var(--green-light)}
@@ -349,8 +351,9 @@ body.sales-mode .sales-banner{display:flex!important}
 const CATALOG = {
   'Garage Doors': {
     type: 'gd',
-    sizes: ["6'x8'","8'x7'","9'x7'","10'x7'","16'x7'","18'x7'","8'x8'","9'x8'","10'x8'","12'x8'","16'x8'","18'x8'"],
-    styleMap: {'8000':['Short Panel','Vertical Short Panel','Long Panel'],'9100':['Short Panel','Vertical Short Panel','Long Panel','Vertical Long Panel','Flush'],'9405':['Short Panel','Vertical Short Panel','Long Panel','Vertical Long Panel','Flush'],'8300':['Short Panel','Vertical Short Panel','Long Panel','Vertical Long Panel','Flush']},
+    widths: ["5'","6'","7'","8'","9'","10'","11'","12'","13'","14'","15'","16'","17'","18'","19'","20'"],
+    heights: ["7'","8'","9'","10'","11'","12'","13'","14'"],
+    styleMap: {'8000':['Short Panel','Vertical Short Panel','Long Panel'],'9100':['Short Panel','Vertical Short Panel','Long Panel','Vertical Long Panel','Flush'],'9405':['Short Panel','Vertical Short Panel','Long Panel','Vertical Long Panel','Flush'],'9605':['Short Panel','Vertical Short Panel','Long Panel','Vertical Long Panel','Flush'],'8300':['Short Panel','Vertical Short Panel','Long Panel','Vertical Long Panel','Flush']},
     designs: {'9405':['Westfield','Charleston','Lexington']},
     desc: function(size,style,design,qty,panel,windows,deco){
       var n=parseInt(qty)||1, w=['zero','one','two','three','four','five','six','seven','eight','nine','ten'];
@@ -422,7 +425,7 @@ const CATALOG = {
     desc:function(t){return 'To provide and install Organized Living '+(t||'VUE')+' melamine shelving, designed to deliver clean, modern, and durable storage solutions. Installation includes all required panels, supports, brackets, and hardware to ensure proper alignment, stability, and long-lasting performance.';}
   },
   'Garage Door Service Call': {type:'simple',desc:'To inspect, adjust, and perform routine maintenance on the existing garage door system, including lubrication of moving parts, hardware inspection, spring and track adjustments as needed, and operational testing to ensure safe and reliable performance.'},
-  'Other': {type:'simple',desc:'To provide labor and materials for the requested scope of work as outlined in this estimate. Installation will be completed in a professional manner using the appropriate materials for the application.'}
+  'Other': {type:'manual',desc:''}
 };
 
 // Homeowner retail prices
@@ -459,6 +462,7 @@ const HO_PRICES = {
       "16'x8'": {solid:4540,  windows:5099},
       "18'x8'": {solid:5510,  windows:6099}
     },
+    '9605': {},
     '8300': {
       "16'x7'": {solid:null, windows:4390},
       "16'x8'": {solid:5150, windows:null}
@@ -518,16 +522,24 @@ function fmt(n){return '$'+Math.abs(n).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/
 function fmtDate(s){if(!s)return '';var p=s.split('-');return p[1]+'/'+p[2]+'/'+p[0];}
 
 // ── CONTROLS ──────────────────────────────────────────────────────────────
+function gdSizeValue(sid){
+  var wEl=document.getElementById('gd-w-'+sid), hEl=document.getElementById('gd-h-'+sid);
+  var w=wEl?wEl.value:"8'", h=hEl?hEl.value:"7'";
+  return w+"x"+h;
+}
 function gdControls(sid){
   var q="'";
-  var szOpts=CATALOG['Garage Doors'].sizes.map(function(s){return '<option>'+s+'</option>';}).join('');
+  var wOpts=CATALOG['Garage Doors'].widths.map(function(s){return '<option'+(s==="8'"?' selected':'')+'>'+s+'</option>';}).join('');
+  var hOpts=CATALOG['Garage Doors'].heights.map(function(s){return '<option'+(s==="7'"?' selected':'')+'>'+s+'</option>';}).join('');
   var stOpts=Object.keys(CATALOG['Garage Doors'].styleMap).map(function(s){return '<option>'+s+'</option>';}).join('');
-  return '<label>Size</label><select id="gd-sz-'+sid+'" onchange="updateDesc('+q+sid+q+')">' +szOpts+'</select>'
+  return '<label>Width</label><select id="gd-w-'+sid+'" onchange="updateDesc('+q+sid+q+');gdAutoPrice('+q+sid+q+')">' +wOpts+'</select>'
+    +'<label>Height</label><select id="gd-h-'+sid+'" onchange="updateDesc('+q+sid+q+');gdAutoPrice('+q+sid+q+')">' +hOpts+'</select>'
     +'<label>Style</label><select id="gd-st-'+sid+'" onchange="gdStyleChange('+q+sid+q+')">' +stOpts+'</select>'
     +'<label>Panel</label><select id="gd-pn-'+sid+'" onchange="showRefImg('+q+sid+q+');updateDesc('+q+sid+q+')"><option value="">— select —</option></select>'
     +'<span id="gd-dw-'+sid+'" style="display:none;align-items:center;gap:6px;"><label>Design</label><select id="gd-ds-'+sid+'" onchange="updateDesc('+q+sid+q+')"><option>Westfield</option><option>Charleston</option><option>Lexington</option></select></span>'
     +'<label style="display:flex;align-items:center;gap:4px;cursor:pointer;font-weight:500;"><input type="checkbox" id="gd-win-'+sid+'" onchange="updateDesc('+q+sid+q+');gdAutoPrice('+q+sid+q+')" style="width:auto;margin:0;" /> Windows</label>'
-    +'<label style="display:flex;align-items:center;gap:4px;cursor:pointer;font-weight:500;"><input type="checkbox" id="gd-deco-'+sid+'" onchange="gdDecoToggle('+q+sid+q+')" style="width:auto;margin:0;" /> Decoration Kit</label>';
+    +'<label style="display:flex;align-items:center;gap:4px;cursor:pointer;font-weight:500;"><input type="checkbox" id="gd-deco-'+sid+'" onchange="gdDecoToggle('+q+sid+q+')" style="width:auto;margin:0;" /> Decoration Kit</label>'
+    +'<button type="button" class="add-item-btn" style="margin-left:6px;" onclick="addItem('+q+sid+q+',\'Unit\',\'\')">+ Add another (manual)</button>';
 }
 function gdDecoToggle(sid){
   var row=document.getElementById('gd-deco-row-'+sid), chk=document.getElementById('gd-deco-'+sid);
@@ -546,10 +558,10 @@ function gdAutoPrice(sid){
   var isHO=document.getElementById('type-homeowner').checked;
   if(!isHO)return;
   var stEl=document.getElementById('gd-st-'+sid);
-  var szEl=document.getElementById('gd-sz-'+sid);
+  var wEl=document.getElementById('gd-w-'+sid);
   var winEl=document.getElementById('gd-win-'+sid);
-  if(!stEl||!szEl)return;
-  var st=stEl.value, sz=szEl.value;
+  if(!stEl||!wEl)return;
+  var st=stEl.value, sz=gdSizeValue(sid);
   var hasWin=winEl&&winEl.checked;
   var styleData=HO_PRICES.GD[st];
   if(!styleData){
@@ -934,9 +946,9 @@ function updateDesc(sid){
   var prodSel=sec.querySelector('.sec-top select'); if(!prodSel)return;
   var prod=prodSel.value, el=document.getElementById('desc-'+sid); if(!el)return;
   if(prod==='Garage Doors'){
-    var szEl=document.getElementById('gd-sz-'+sid),stEl=document.getElementById('gd-st-'+sid),dsEl=document.getElementById('gd-ds-'+sid),pnEl=document.getElementById('gd-pn-'+sid),winEl=document.getElementById('gd-win-'+sid),decoEl=document.getElementById('gd-deco-'+sid),qEl=sec.querySelector('tbody input[type=number]');
+    var stEl=document.getElementById('gd-st-'+sid),dsEl=document.getElementById('gd-ds-'+sid),pnEl=document.getElementById('gd-pn-'+sid),winEl=document.getElementById('gd-win-'+sid),decoEl=document.getElementById('gd-deco-'+sid),qEl=sec.querySelector('tbody input[type=number]');
     var stV=stEl?stEl.value:'8000',dsV=(stV==='9405'&&dsEl)?dsEl.value:'';
-    el.textContent=CATALOG['Garage Doors'].desc(szEl?szEl.value:"8'x7'",stV,dsV,qEl?(parseInt(qEl.value)||1):1,(pnEl&&pnEl.value)?pnEl.value:'',winEl?winEl.checked:false,decoEl?decoEl.checked:false);
+    el.textContent=CATALOG['Garage Doors'].desc(gdSizeValue(sid),stV,dsV,qEl?(parseInt(qEl.value)||1):1,(pnEl&&pnEl.value)?pnEl.value:'',winEl?winEl.checked:false,decoEl?decoEl.checked:false);
   } else if(prod==='Garage Door Openers'){
     var mdEl=document.getElementById('op-md-'+sid);
     var rlEl=document.getElementById('op-rl-'+sid);
@@ -959,7 +971,7 @@ function updateDesc(sid){
   } else if(prod==='Melamine'){
     var tpEl=document.getElementById('mel-tp-'+sid);
     el.textContent=CATALOG['Melamine'].desc(tpEl?tpEl.value:'VUE');
-  } else {var cat=CATALOG[prod]||{};el.textContent=(typeof cat.desc==='function')?cat.desc():((typeof cat.desc==='string')?cat.desc:'');}
+  } else {if(el.tagName==='TEXTAREA')return; var cat=CATALOG[prod]||{};el.textContent=(typeof cat.desc==='function')?cat.desc():((typeof cat.desc==='string')?cat.desc:'');}
 }
 
 // ── SHOWER DOOR ROWS ──────────────────────────────────────────────────────
@@ -1128,6 +1140,10 @@ function addSection(prod){
   else if(prod==='Screen Porches'){extra=screenPorchControls(sid);initDesc=CATALOG['Screen Porches'].desc('White',false);}
   else{initDesc=(typeof cat.desc==='string')?cat.desc:'';}
 
+  var descHTML=(prod==='Other')
+    ? '<textarea class="desc-preview-textarea" id="desc-'+sid+'" rows="3" placeholder="Describe this item in detail: what it is, measurements, materials, scope of work..."></textarea>'
+    : '<div class="desc-preview" id="desc-'+sid+'">'+initDesc+'</div>';
+
   var div=document.createElement('div'); div.className='sec-block'; div.id=sid;
   div.innerHTML='<div class="sec-top"><label>Product</label><select onchange="onProdChange(this,'+q+sid+q+')"><option>-</option>'+prodOpts+'</select>'+extra+'<button class="remove-sec" onclick="removeSec('+q+sid+q+')">&#215;</button></div>'
     +'<div id="gd-img-'+sid+'" style="display:none;"></div>'
@@ -1136,7 +1152,7 @@ function addSection(prod){
     +'<button type="button" class="img-upload-btn" id="img-btn-'+sid+'" onclick="document.getElementById('+q+'img-file-'+sid+q+').click()">+ Add product image</button>'
     +'<div class="img-preview" id="img-preview-'+sid+'" style="display:none;"><img id="img-thumb-'+sid+'" src="" alt="Product image"><button type="button" class="img-remove-btn" onclick="removeSecImage('+q+sid+q+')">&#215; Remove image</button></div>'
     +'</div>'
-    +'<div class="desc-preview" id="desc-'+sid+'">'+initDesc+'</div>'
+    +descHTML
     +'<table class="items-table"><thead><tr id="thead-'+sid+'">'
     +'<th style="width:40%">Notes (optional)</th><th class="c" style="width:10%">Unit</th><th class="c" style="width:9%">Qty</th><th class="r th-price" style="width:14%">Unit price</th><th class="r" style="width:14%">Total</th><th style="width:5%"></th>'
     +'</tr></thead><tbody id="tbody-'+sid+'"></tbody></table>'
@@ -1191,6 +1207,20 @@ function onProdChange(sel,sid){
   if(addRowDiv)addRowDiv.innerHTML='<button class="add-item-btn" onclick="addItem(\''+sid+'\')">+ Add item</button>';
   var tbody=document.getElementById('tbody-'+sid);if(tbody)tbody.innerHTML='';
   document.getElementById('gd-img-'+sid+'') && (document.getElementById('gd-img-'+sid).style.display='none');
+  var descEl=document.getElementById('desc-'+sid);
+  if(descEl){
+    var needsTextarea=(prod==='Other'), isTextarea=descEl.tagName==='TEXTAREA';
+    if(needsTextarea&&!isTextarea){
+      var ta=document.createElement('textarea');
+      ta.id='desc-'+sid; ta.className='desc-preview-textarea'; ta.rows=3;
+      ta.placeholder='Describe this item in detail: what it is, measurements, materials, scope of work...';
+      descEl.parentNode.replaceChild(ta,descEl);
+    } else if(!needsTextarea&&isTextarea){
+      var dv=document.createElement('div');
+      dv.id='desc-'+sid; dv.className='desc-preview';
+      descEl.parentNode.replaceChild(dv,descEl);
+    }
+  }
   if(prod==='Gutters')addGutterItems(sid);
   else if(prod==='Screen Porches')addItem(sid,'Lin ft','');
   else if(prod==='Bath Accessories')addBathItems(sid);
@@ -1736,9 +1766,9 @@ function buildPrintView(){
     if(!prod)return;
     var desc='', refImg='', imgCaption='';
     if(prod==='Garage Doors'){
-      var szEl=document.getElementById('gd-sz-'+sid),stEl=document.getElementById('gd-st-'+sid),dsEl=document.getElementById('gd-ds-'+sid),pnEl=document.getElementById('gd-pn-'+sid),winEl=document.getElementById('gd-win-'+sid),decoEl=document.getElementById('gd-deco-'+sid),qEl=sec.querySelector('tbody input[type=number]');
+      var stEl=document.getElementById('gd-st-'+sid),dsEl=document.getElementById('gd-ds-'+sid),pnEl=document.getElementById('gd-pn-'+sid),winEl=document.getElementById('gd-win-'+sid),decoEl=document.getElementById('gd-deco-'+sid),qEl=sec.querySelector('tbody input[type=number]');
       var stV=stEl?stEl.value:'8000',dsV=(stV==='9405'&&dsEl)?dsEl.value:'',pnV=(pnEl&&pnEl.value)?pnEl.value:'';
-      desc=CATALOG['Garage Doors'].desc(szEl?szEl.value:"8'x7'",stV,dsV,qEl?(parseInt(qEl.value)||1):1,pnV,winEl?winEl.checked:false,decoEl?decoEl.checked:false);
+      desc=CATALOG['Garage Doors'].desc(gdSizeValue(sid),stV,dsV,qEl?(parseInt(qEl.value)||1):1,pnV,winEl?winEl.checked:false,decoEl?decoEl.checked:false);
       if(includeImages&&IMAGES[stV]&&IMAGES[stV][pnV]){refImg=IMAGES[stV][pnV];imgCaption=(CAPTIONS[stV]&&CAPTIONS[stV][pnV])?CAPTIONS[stV][pnV]:'';}
     } else if(prod==='Garage Door Openers'){
       var mdEl=document.getElementById('op-md-'+sid),mdV=mdEl?mdEl.value:CATALOG['Garage Door Openers'].models[0];
@@ -1755,6 +1785,10 @@ function buildPrintView(){
       var clV=clEl?clEl.value:'White'; if(clV==='Other')clV=(oeEl&&oeEl.value)?oeEl.value:'Other';
       desc=CATALOG['Gutters'].desc(szEl?szEl.value:'5"',clV,dsEl?dsEl.value:'2"x3"',lgEl?lgEl.checked:false);
     } else if(prod==='Screen Porches'){var clEl=document.getElementById('sp-cl-'+sid),drEl=document.getElementById('sp-dr-'+sid);desc=CATALOG['Screen Porches'].desc(clEl?clEl.value:'White',drEl?drEl.checked:false);
+    } else if(prod==='Other'){
+      var otherTa=document.getElementById('desc-'+sid);
+      var otherTxt=otherTa?otherTa.value.trim():'';
+      desc=otherTxt?otherTxt.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>'):'';
     } else {var cat=CATALOG[prod]||{};desc=(typeof cat.desc==='string')?cat.desc:'';}
 
     var customImg=sec.getAttribute('data-custom-img');
