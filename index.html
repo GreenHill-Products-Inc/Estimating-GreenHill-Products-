@@ -677,8 +677,18 @@ function showerFinishChange(sid){
   if(fnEl&&wrap)wrap.style.display=(fnEl.value==='Other')?'inline-flex':'none';
   updateDesc(sid); showerRefresh(sid);
 }
+function markShowerUpgradeManual(sid){
+  var row=document.getElementById('sh-upgrade-'+sid); if(row)row.setAttribute('data-price-manual','1');
+}
 function showerRefresh(sid){
   updateDesc(sid);
+  // Frame type / config changed the pricing basis — clear manual overrides so
+  // the catalog price shows fresh again (still editable afterward).
+  var tbodyEl=document.getElementById('tbody-'+sid);
+  if(tbodyEl){
+    tbodyEl.querySelectorAll('tr[data-shower-row]').forEach(function(tr){tr.removeAttribute('data-price-manual');});
+    var upgRow=document.getElementById('sh-upgrade-'+sid); if(upgRow)upgRow.removeAttribute('data-price-manual');
+  }
   showerUpdateRows(sid);
   showRefImg(sid);
   // Show/hide color upgrades checkbox based on type
@@ -986,7 +996,7 @@ function addShowerRow(sid, rowType){
   var wInput=document.createElement('input'); wInput.type='number'; wInput.className='c'; wInput.min='0'; wInput.placeholder='W"'; wInput.style.cssText='width:52px;border:1px solid #cde09a;border-radius:4px;padding:4px 5px;font-size:12px;'; wInput.oninput=function(){showerUpdateRows(sid);};
   var hInput=document.createElement('input'); hInput.type='number'; hInput.className='c'; hInput.min='0'; hInput.placeholder='H"'; hInput.style.cssText='width:52px;border:1px solid #cde09a;border-radius:4px;padding:4px 5px;font-size:12px;';
   hInput.oninput=function(){tr.setAttribute('data-h', this.value); showerUpdateRows(sid);};
-  var prInput=document.createElement('input'); prInput.type='number'; prInput.className='r'; prInput.min='0'; prInput.step='0.01'; prInput.value='55.00'; prInput.style.width='70px'; prInput.oninput=function(){showerUpdateRows(sid);};
+  var prInput=document.createElement('input'); prInput.type='number'; prInput.className='r'; prInput.min='0'; prInput.step='0.01'; prInput.value='55.00'; prInput.style.width='70px'; prInput.oninput=function(){tr.setAttribute('data-price-manual','1'); showerUpdateRows(sid);};
   var notesInput=document.createElement('input'); notesInput.type='text'; notesInput.placeholder='Notes (optional)'; notesInput.style.cssText='width:100%;border:1px solid transparent;border-radius:4px;padding:4px 5px;font-size:12px;font-family:inherit;background:transparent;'; notesInput.onmouseover=function(){this.style.background='var(--bg)';}; notesInput.onfocus=function(){this.style.border='1px solid var(--green)';this.style.background='white';};  notesInput.onblur=function(){this.style.border='1px solid transparent';this.style.background='transparent';};
   var sqftCell=document.createElement('td'); sqftCell.id='sqft-'+rid; sqftCell.style.cssText='width:12%;text-align:center;font-size:12px;color:#888;'; sqftCell.textContent='—';
   var ltCell=document.createElement('td'); ltCell.id='lt-'+rid; ltCell.className='line-total'; ltCell.style.cssText='width:12%;text-align:right;font-weight:700;';  ltCell.textContent='$0.00';
@@ -1030,8 +1040,9 @@ function showerUpdateRows(sid){
     var w=parseFloat(ins[0].value)||0, h=parseFloat(ins[1].value)||0;
     var sqft=(w>0&&h>0)?Math.round(w*h/144*100)/100:0;
     var sqftCell=document.getElementById('sqft-'+rid); if(sqftCell)sqftCell.textContent=sqft>0?sqft+' sq ft':'—';
-    ins[2].value=basePrice.toFixed(2);
-    var line=sqft*basePrice;
+    if(tr.getAttribute('data-price-manual')!=='1')ins[2].value=basePrice.toFixed(2); // only auto-fill if the user hasn't manually edited this price
+    var priceNow=parseFloat(ins[2].value)||0;
+    var line=sqft*priceNow;
     var ltCell=document.getElementById('lt-'+rid); if(ltCell)ltCell.textContent=fmt(line);
   });
   // Color upgrade
@@ -1043,14 +1054,15 @@ function showerUpdateRows(sid){
       upgradeRow=document.createElement('tr'); upgradeRow.id='sh-upgrade-'+sid;
       upgradeRow.innerHTML='<td colspan="3"><input type="text" value="Color upgrade \u2013 '+fn+'" style="font-size:13px;border:1px solid transparent;border-radius:4px;padding:5px 6px;width:100%;font-family:inherit;background:transparent;"/></td>'
         +'<td style="text-align:center;font-size:12px;color:#888;">1 unit</td>'
-        +'<td><input type="number" class="r" value="'+colorUpgrade.toFixed(2)+'" oninput="recalc()" style="width:70px;"/></td>'
+        +'<td><input type="number" class="r" value="'+colorUpgrade.toFixed(2)+'" oninput="markShowerUpgradeManual('+q+sid+q+');recalc()" style="width:70px;"/></td>'
         +'<td class="line-total" id="lt-sh-upgrade-'+sid+'">'+fmt(colorUpgrade)+'</td>'
         +'<td class="del-cell"><button class="del-btn" onclick="removeItem('+q+'sh-upgrade-'+sid+q+')">&#215;</button></td>';
       tbody.appendChild(upgradeRow);
     } else {
       var noteIn=upgradeRow.querySelector('input[type=text]'); if(noteIn)noteIn.value='Color upgrade \u2013 '+fn;
-      var prIn=upgradeRow.querySelectorAll('input[type=number]')[0]; if(prIn)prIn.value=colorUpgrade.toFixed(2);
-      var ltU=document.getElementById('lt-sh-upgrade-'+sid); if(ltU)ltU.textContent=fmt(colorUpgrade);
+      if(upgradeRow.getAttribute('data-price-manual')!=='1'){var prIn=upgradeRow.querySelectorAll('input[type=number]')[0]; if(prIn)prIn.value=colorUpgrade.toFixed(2);}
+      var upNow=parseFloat(upgradeRow.querySelectorAll('input[type=number]')[0].value)||0;
+      var ltU=document.getElementById('lt-sh-upgrade-'+sid); if(ltU)ltU.textContent=fmt(upNow);
     }
   } else if(upgradeRow){ upgradeRow.remove(); }
   // Update/show shower subtotal row — always at the very bottom
@@ -1060,7 +1072,8 @@ function showerUpdateRows(sid){
     var w=parseFloat(ins[0].value)||0,h=parseFloat(ins[1].value)||0,p=parseFloat(ins[2].value)||0;
     showerTotal+=(w>0&&h>0)?Math.round(w*h/144*100)/100*p:0;
   });
-  if(colorUpgrade>0)showerTotal+=colorUpgrade;
+  var finalUpgradeRow=document.getElementById('sh-upgrade-'+sid);
+  if(finalUpgradeRow){var upIns=finalUpgradeRow.querySelectorAll('input[type=number]'); if(upIns[0])showerTotal+=parseFloat(upIns[0].value)||0;}
   var subRow=document.getElementById('sh-sub-'+sid);
   if(subRow)subRow.remove(); // remove and re-append to ensure it's always last
   subRow=document.createElement('tr'); subRow.id='sh-sub-'+sid;
@@ -1941,7 +1954,7 @@ setDates(); addSection('Garage Doors'); onClientType();
 
 // ── SAVE TO LOG ───────────────────────────────────────────────────────────────
 // Replace this URL after deploying the Apps Script
-var APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyjErF0qjw3qLS3dNKgI5T5q0JRh3eXlnoRFXVtknsC5nxbZC1hvEJ-0x0qvxwzXvbr/exec';
+var APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxcqYPGWEgMik-3_FeVcGUq9anPLaG46X83dKA5Kd32nuZyOojrC8sEFKdts-mSLUI/exec';
 
 function getWeekOfMonth(dateStr) {
   if (!dateStr) return '';
